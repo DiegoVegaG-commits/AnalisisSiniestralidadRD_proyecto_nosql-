@@ -17,9 +17,6 @@ Proyecto final del módulo **NoSQL/MongoDB** del *Diplomado en Manejo de Bases d
 | Archivo fuente `accidentes_mongo.jsonl` | Datos ya transformados, listos para importar |
 
 *(Captura recomendada 📸: salida de `mongod --version` y `mongosh --version` o `mongoimport --version` confirmando el entorno del Learner Lab.)*
-<img width="1678" height="359" alt="image" src="https://github.com/user-attachments/assets/3a6b8845-8b88-43f9-9c24-77ffc69044b6" />
-
-
 
 ---
 
@@ -44,6 +41,25 @@ Antes de la carga, el CSV original (columnas planas tipo `Start_Lat`, `Start_Lng
 ## 🚀 Orden de ejecución y reproducción
 
 Sigue estos pasos en tu terminal para reproducir el entorno y los resultados desde cero.
+
+### Resumen rápido (archivos del repo, en orden)
+
+| # | Archivo | Qué hace |
+|---|---|---|
+| 1 | `transformar_a_mongo.py` | Genera `accidentes_mongo.jsonl` a partir del CSV fuente |
+| 2 | *(comando `mongoimport`, ver abajo)* | Carga el `.jsonl` a la colección `accidentes` |
+| 3 | `consultas/00_indices_y_validacion.js` | Crea los 3 índices y el validador `$jsonSchema` |
+| 4 | `seguridad/vista_publica.js` | Crea la vista `vista_accidentes_segura` (debe ir antes del paso 5, porque un rol de ese paso apunta a esta vista) |
+| 5 | `seguridad/roles_y_usuarios.js` | Crea los 3 roles y usuarios (`admin_riesgo`, `analista_vial`, `consulta_publica`) |
+| 6 | `consultas/p1_zonas_riesgo.js` … `p5_busqueda_textual.js` | Los 5 pipelines de investigación (se pueden correr en cualquier orden entre sí) |
+
+Cada script de `consultas/` y `seguridad/` se ejecuta así (ejemplo con p1):
+
+```bash
+./.tools/bin/mongosh "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" consultas/p1_zonas_riesgo.js
+```
+
+A continuación, el detalle y justificación de cada paso (el código de esta sección es equivalente al de los archivos del repo, mostrado aquí para que se entienda sin tener que abrir cada archivo):
 
 ### 1. Importación de los datos
 
