@@ -17,6 +17,9 @@ Proyecto final del módulo **NoSQL/MongoDB** del *Diplomado en Manejo de Bases d
 | Archivo fuente `accidentes_mongo.jsonl` | Datos ya transformados, listos para importar |
 
 *(Captura recomendada 📸: salida de `mongod --version` y `mongosh --version` o `mongoimport --version` confirmando el entorno del Learner Lab.)*
+<img width="1678" height="359" alt="image" src="https://github.com/user-attachments/assets/3a6b8845-8b88-43f9-9c24-77ffc69044b6" />
+
+
 
 ---
 
