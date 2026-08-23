@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# Entorno / credenciales
+.env
+
+# Datos generados localmente (opcional: descomenta si no quieres subir el NDJSON)
+# accidentes_mongo.jsonl
+
+# Sistema
+.DS_Store
