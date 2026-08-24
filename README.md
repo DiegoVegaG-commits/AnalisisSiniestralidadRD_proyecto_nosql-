@@ -40,20 +40,20 @@ Antes de la carga, el CSV original (columnas planas tipo `Start_Lat`, `Start_Lng
 
 ---
 
-## 🚀 Orden de ejecución y reproducción
+## Orden de ejecución y reproducción
 
 Sigue estos pasos en tu terminal para reproducir el entorno y los resultados desde cero.
 
-### Resumen rápido (archivos del repo, en orden)
+### Resumen rápido 
 
-| # | Archivo | Qué hace |
+| # | Archivo / Comando | Qué hace |
 |---|---|---|
-| 1 | `transformar_a_mongo.py` | Genera `accidentes_mongo.jsonl` a partir del CSV fuente |
-| 2 | *(comando `mongoimport`, ver abajo)* | Carga el `.jsonl` a la colección `accidentes` |
-| 3 | `consultas/00_indices_y_validacion.js` | Crea los 3 índices y el validador `$jsonSchema` |
-| 4 | `seguridad/vista_publica.js` | Crea la vista `vista_accidentes_segura` (debe ir antes del paso 5, porque un rol de ese paso apunta a esta vista) |
-| 5 | `seguridad/roles_y_usuarios.js` | Crea los 3 roles y usuarios (`admin_riesgo`, `analista_vial`, `consulta_publica`) |
-| 6 | `consultas/p1_zonas_riesgo.js` … `p5_busqueda_textual.js` | Los 5 pipelines de investigación (se pueden correr en cualquier orden entre sí) |
+| 1 | `transformar_a_mongo.py` | Procesa y estructura el CSV fuente, generando `accidentes_mongo.jsonl` con formato GeoJSON y tipos nativos BSON. |
+| 2 | Comando `mongoimport` | Realiza la ingesta de los 27,049 documentos en la base `proyecto_accidentes_db` dentro de la colección `accidentes`. |
+| 3 | `consultas/00_indices_y_validacion.js` | Aplica la regla `$jsonSchema` a la colección y genera los índices `2dsphere`, texto y compuesto (`weather.condition` + `severity`). |
+| 4 | `seguridad/vista_publica.js` | Crea `vista_accidentes_segura` aplicando `$project` para minimización de datos (requerida previamente para el paso 5). |
+| 5 | `seguridad/roles_y_usuarios.js` | Define los roles (`RolAdminRiesgo`, `RolAnalistaLectura`, `RolConsultaPublica`) y crea los usuarios correspondientes aplicando el principio de menor privilegio. |
+| 6 | `consultas/p1_zonas_riesgo.js` a `p5_busqueda_textual.js` | Ejecuta de forma independiente los 5 pipelines de agregación para responder a las preguntas de análisis vial. |
 
 Cada script de `consultas/` y `seguridad/` se ejecuta así (ejemplo con p1):
 
@@ -63,7 +63,7 @@ Cada script de `consultas/` y `seguridad/` se ejecuta así (ejemplo con p1):
 
 A continuación, el detalle y justificación de cada paso (el código de esta sección es equivalente al de los archivos del repo, mostrado aquí para que se entienda sin tener que abrir cada archivo):
 
-### 1. Importación de los datos
+### 1. Carga de los datos
 
 Este comando importa los 27,049 registros a la colección `accidentes` dentro de la base `proyecto_accidentes_db`:
 
@@ -73,11 +73,12 @@ mongoimport --uri "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnec
   --file proyecto_final/accidentes_mongo.jsonl
 ```
 
-*(Captura recomendada 📸: salida de la terminal mostrando `imported 27049 documents`.)*
+<img width="1249" height="192" alt="image" src="https://github.com/user-attachments/assets/5a8c8981-b891-4000-8635-8a8883cf7b09" />
+
 
 ### 2. Creación de índices
 
-Se crean dos índices con propósitos distintos y complementarios:
+Implementamos tres índices con propósitos específicos para optimizar las consultas del proyecto:
 
 ```javascript
 mongosh "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" --quiet --eval '
@@ -99,7 +100,7 @@ db.accidentes.createIndex({ location: "2dsphere" });
 
 > Este índice solo puede crearse porque durante la transformación se excluyó el registro con latitud inválida (95°); un `2dsphere` falla si existe algún documento con coordenadas fuera de rango.
 
-*(Captura recomendada 📸: `db.accidentes.getIndexes()` mostrando los cuatro índices activos: `_id`, `weather.condition + severity`, `description` (text) y `location` (2dsphere).)*
+<img width="737" height="711" alt="image" src="https://github.com/user-attachments/assets/25f072c4-0cf7-40aa-be2e-984fdd29c915" />
 
 ### Validación de esquema (`$jsonSchema`)
 
