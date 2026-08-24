@@ -26,5 +26,5 @@ var p1 = db.accidentes.aggregate([
   { $limit: 10 }
 ]).toArray();
 
-print("--- TOP 10 CONDADOS CON MÁS ACCIDENTES ---");
+print("--- TOP 10 ESTADOS CON MÁS ACCIDENTES ---");
 printjson(p1);
