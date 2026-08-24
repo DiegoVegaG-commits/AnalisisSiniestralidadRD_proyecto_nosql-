@@ -15,7 +15,7 @@ db.createRole({
   privileges: [
     {
       resource: { db: "proyecto_accidentes_db", collection: "accidentes" },
-      actions: ["find", "insert", "update", "remove", "aggregate"]
+      actions: ["find", "insert", "update", "remove"]
     }
   ],
   roles: []
@@ -36,7 +36,7 @@ db.createRole({
   privileges: [
     {
       resource: { db: "proyecto_accidentes_db", collection: "accidentes" },
-      actions: ["find", "aggregate"]
+      actions: ["find"]
     }
   ],
   roles: []
@@ -57,7 +57,7 @@ db.createRole({
   privileges: [
     {
       resource: { db: "proyecto_accidentes_db", collection: "vista_accidentes_segura" },
-      actions: ["find", "aggregate"]
+      actions: ["find"]
     }
   ],
   roles: []
