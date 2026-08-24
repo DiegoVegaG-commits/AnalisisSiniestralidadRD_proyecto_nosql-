@@ -34,5 +34,5 @@ var p3 = db.accidentes.aggregate([
   { $limit: 10 }
 ]).toArray();
 
-print("--- TOP 10 HORARIOS Y LUZ CON MÁS ACCIDENTES ---");
+print("--- TOP 10 HORARIOS Y LUZ DE DÏA CON MÁS ACCIDENTES ---");
 printjson(p3);
