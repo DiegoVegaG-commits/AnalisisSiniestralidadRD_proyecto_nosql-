@@ -6,6 +6,8 @@
 // Requiere ejecutarse con una identidad que ya tenga privilegios de
 // administración de usuarios y roles.
 
+db = db.getSiblingDB('proyecto_accidentes_db');
+
 // -----------------------------------------------------------------
 // 1. RolAdminRiesgo — control total sobre la colección fuente
 //    (carga inicial, correcciones, mantenimiento de índices/validador)
@@ -23,7 +25,7 @@ db.createRole({
 
 db.createUser({
   user: "admin_riesgo",
-  pwd: "CAMBIAR_ANTES_DE_EJECUTAR", // En producción se inyecta por variables de entorno / gestor de secretos
+  pwd: "PasswordAdminRiesgo2026",
   roles: [ { role: "RolAdminRiesgo", db: "proyecto_accidentes_db" } ]
 });
 
@@ -44,7 +46,7 @@ db.createRole({
 
 db.createUser({
   user: "analista_vial",
-  pwd: "CAMBIAR_ANTES_DE_EJECUTAR", // En producción se inyecta por variables de entorno / gestor de secretos
+  pwd: "PasswordAnalista2026",
   roles: [ { role: "RolAnalistaLectura", db: "proyecto_accidentes_db" } ]
 });
 
@@ -65,8 +67,8 @@ db.createRole({
 
 db.createUser({
   user: "consulta_publica",
-  pwd: "CAMBIAR_ANTES_DE_EJECUTAR", // En producción se inyecta por variables de entorno / gestor de secretos
+  pwd: "PasswordPublico2026",
   roles: [ { role: "RolConsultaPublica", db: "proyecto_accidentes_db" } ]
 });
 
-print("Roles y usuarios creados correctamente: admin_riesgo, analista_vial, consulta_publica.");
+print("Roles, usuarios y esquemas configurados exitosamente.");
