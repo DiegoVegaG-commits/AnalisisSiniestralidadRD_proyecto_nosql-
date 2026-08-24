@@ -482,49 +482,12 @@ El `resource` de este rol apunta directamente a `vista_accidentes_segura`, **no*
 
 ---
 
-## 📁 Estructura sugerida del repositorio
+## Límites y alcance declarado
 
-```
-proyecto_final/
-├── README.md
-├── accidentes_mongo.jsonl        # Datos ya transformados, listos para mongoimport
-├── transformar_a_mongo.py        # CSV -> NDJSON (GeoJSON, ISODate, subdocumentos)
-├── consultas/
-│   ├── p1_zonas_riesgo.js
-│   ├── p2_estacionalidad.js
-│   ├── p3_horarios_luz.js
-│   ├── p4_explain_climatico.js
-│   └── p5_busqueda_textual.js
-├── seguridad/
-│   ├── roles_y_usuarios.js
-│   └── vista_publica.js
-└── capturas/
-    ├── 01_mongoimport.png
-    ├── 02_indices.png
-    ├── 03_pregunta1.png
-    ├── 04_pregunta2.png
-    ├── 05_pregunta3.png
-    ├── 06_explain_antes_despues.png
-    ├── 07_pregunta5.png
-    └── 08_roles_seguridad.png
-```
+- Los 27,049 registros utilizados sirven como una muestra para realizar el análisis, pero no representan todos los accidentes de EE. UU. Por eso, los porcentajes y rankings obtenidos deben tomarse como resultados de esta muestra y no como cifras oficiales.
+- Se encontró un registro con una latitud inválida de 95°, por lo que se decidió excluirlo antes de importar los datos a MongoDB.
+- El modelo de seguridad se realizó con fines académicos y utiliza datos sin información personal directamente identificable. Por lo tanto, sirve como demostración de los controles de acceso, pero no representa una implementación real de cumplimiento normativo.
+- Para las consultas se utilizó `timezone: "UTC"` de manera uniforme. No se consideró la zona horaria específica de cada estado, por lo que algunos resultados de las preguntas 2 y 3 podrían presentar pequeñas variaciones.
 
-> Esta estructura es una sugerencia basada en cómo está organizado el contenido de este README; ajústala al árbol de carpetas que ya tengas en tu repo real.
 
----
 
-## ⚠️ Límites y alcance declarado
-
-- La muestra de 27,049 registros es representativa, no exhaustiva; los porcentajes y rankings no deben interpretarse como cifras oficiales de siniestralidad en EE. UU.
-- Un registro con latitud inválida (95°) fue excluido antes de la carga.
-- El modelo de seguridad es un diseño didáctico con datos sintéticos/reales pero sin PII directa; no debe tomarse como una implementación de cumplimiento normativo real.
-- Las consultas usan `timezone: "UTC"` de forma consistente; no se ajustó por zona horaria local de cada estado, lo cual podría desplazar ligeramente los resultados de las preguntas 2 y 3.
-
----
-
-## 🙋 Qué me falta para completar este README al 100%
-
-Ya integré el índice `2dsphere`, el validador `$jsonSchema`, y los tres roles completos (`admin_riesgo`, `analista_vial`, `consulta_publica`) con sus usuarios y la vista de seguridad. Para cerrar el README sin huecos, solo faltaría:
-
-1. Resultados reales de al menos una consulta (para reemplazar los placeholders de captura con datos concretos, si quieres que el README los incluya en texto además de imagen).
-2. Nombre real de la carpeta/repo si difiere de `proyecto_final/`.
