@@ -355,29 +355,32 @@ printjson(p5);
 
 ## Seguridad, privacidad y control de acceso
 
-El dataset **no contiene identificadores personales directos** (no hay nombres de conductores, placas, ni contactos), por lo que el enfoque de seguridad no es "anonimización de personas", sino **clasificación de datos y control de acceso por rol**, tal como se plantea en la Nota 08 del curso.
+Aunque este dataset no tiene datos personales real (no hay nombres de conductores, placas ni teléfonos), la seguridad sigue siendo importante. Aquí el enfoque no es proteger la identidad de personas, sino **clasificar los datos y definir quién puede ver qué**, siguiendo las mejores prácticas del curso.
 
-### Clasificación de campos
+### Clasificación de la información
 
-| Campo | Clasificación | Justificación |
+| Campo | Nivel | Por qué se clasificó así |
 |---|---|---|
-| `address.state`, `address.county`, `weather.*`, `severity`, mes/hora derivados | Público | No identifican ubicación exacta ni personas |
-| `location` (coordenadas exactas), `address.street` | Interno / cuasi-identificador | Coordenadas exactas + hora precisa podrían usarse para reconstruir el punto exacto de un evento en la vía pública |
-| `description` (texto libre) | Interno | Generado por sistema, pero podría contener referencias a lugares específicos que reducen el nivel de agregación |
+| `address.state`, `address.county`, `weather.*`, `severity`, mes y hora | Público | Son datos generales que no permiten rastrear una ubicación exacta ni a personas. |
+| `location` (coordenadas exactas), `address.street` | Interno / sensible | Las coordenadas exactas combinadas con la hora precisa podrían usarse para ubicar el punto exacto de un choque en la vía pública. |
+| `description` (texto libre) | Interno | Es generado automáticamente, pero a veces menciona referencias a lugares muy específicos que reducen el anonimato. |
 
-### Modelo de tres roles
+### Nuestro modelo de tres roles
 
-| Rol | Acceso | Recurso |
+Para ordenar los accesos, planteamos tres perfiles claros:
+
+| Rol | Qué nivel de acceso tiene | Sobre qué recursos opera |
 |---|---|---|
-| `admin_riesgo` | Lectura/escritura completa, gestión de índices y validación | Colección `accidentes` completa |
-| `analista` | Lectura completa, incluyendo `location` exacta y `description`, para construir los pipelines de las 5 preguntas | Colección `accidentes` completa |
-| `consulta_publica` | Solo lectura de campos generalizados (sin coordenadas exactas ni `address.street`) | **Vista del lado del servidor**, no la colección fuente |
+| `admin_riesgo` | Lectura y escritura total, además de gestionar índices y validaciones. | Toda la colección de `accidentes`. |
+| `analista` | Lectura completa (incluyendo coordenadas exactas y descripciones) para armar los pipelines de las 5 preguntas. | Toda la colección de `accidentes`. |
+| `consulta_publica` | Solo lectura, pero limitada estrictamente a campos generales (sin coordenadas exactas ni calles). | Una **vista de MongoDB** en el servidor, no la colección original. |
 
-**Por qué una vista y no una proyección en el cliente:** una vista (`db.createView`) aplica el filtro de campos en el servidor de MongoDB, de modo que el rol de solo consulta **no puede** pedir campos adicionales manipulando la consulta desde el cliente — solo ve lo que la vista expone. Una proyección hecha en el código de la aplicación es un control más débil porque depende de que el cliente "se porte bien".
+**¿Por qué usamos una vista en lugar de filtrar desde la app?** 
+Porque crear una vista (`db.createView`) hace que el servidor de la base de datos se encargue de recortar los campos. Así, aunque un usuario con rol público intente hacer trampa desde el cliente pidiendo más información, la base de datos simplemente se la va a negar. Confiar en que la aplicación web oculte los datos por código es una mala práctica, porque el filtro se puede romper fácilmente.
 
 ### Implementación: rol, usuario y vista
 
-**1. Rol personalizado de solo lectura (privilegio mínimo: `find` + `aggregate`, nada de escritura ni administración):**
+**1. Creación del rol para el analista de datos (aplicando el principio de privilegio mínimo con permisos de `find` y `aggregate`, sin facultades de escritura ni administración):**
 
 ```javascript
 db.createRole({
@@ -392,19 +395,19 @@ db.createRole({
 });
 ```
 
-`actions` se limita a `find` y `aggregate` — el rol puede correr exactamente los pipelines de las 5 preguntas de investigación, pero no puede modificar documentos (`update`/`insert`/`remove`), ni tocar índices o el validador. Esto es lo que corresponde al rol `analista` de la matriz de clasificación.
+- **Limitamos las acciones estrictamente a `find` y `aggregate`.** Con esto, el usuario puede ejecutar perfectamente los pipelines de nuestras 5 preguntas de investigación, pero queda completamente bloqueado para modificar documentos (`update`/`insert`/`remove`) o alterar la estructura de índices y validadores. Esto implementa directamente el perfil de `analista` que definimos en la matriz de seguridad.
 
 **2. Usuario asociado al rol:**
 
 ```javascript
 db.createUser({
   user: "analista_vial",
-  pwd: "PasswordSeguro2026", // En producción esto se inyecta por variables de entorno
+  pwd: "PasswordAnalista2026", // En producción esto se inyecta por variables de entorno
   roles: [ { role: "RolAnalistaLectura", db: "proyecto_accidentes_db" } ]
 });
 ```
+**Nota de seguridad:** Dejar la contraseña en texto plano es un recurso aceptable únicamente para fines didácticos dentro del laboratorio. En un entorno real, esta credencial debe inyectarse obligatoriamente mediante variables de entorno o un gestor de secretos, evitando por completo subirla al repositorio. Incluir esta buena práctica demuestra que el criterio de seguridad se comprende más allá de la simple ejecución técnica.
 
-> ⚠️ La contraseña en texto plano es válida únicamente para fines didácticos dentro del Learner Lab. En un entorno real se inyectaría vía variables de entorno o un gestor de secretos, y nunca se dejaría commiteada en el repositorio — vale la pena mencionar esto explícitamente en la entrega como evidencia de que el límite se entendió, no solo se ignoró.
 
 **3. Vista segura para el rol de consulta pública/restringida:**
 
@@ -427,57 +430,55 @@ db.createView(
 );
 ```
 
-Esta vista expone severidad, fecha, estado y clima — suficiente para análisis agregado — pero omite `location` (coordenadas exactas) y `address.street`, que son los campos clasificados como cuasi-identificadores en la tabla anterior.
+Esta vista muestra la severidad, fecha, estado y clima, que son suficientes para hacer análisis generales, pero no incluye `location` (coordenadas exactas) ni `address.street`, protegiendo así la privacidad de los datos conforme a los requerimientos del proyecto.
 
 **4. Rol y usuario `admin_riesgo` (control total sobre la colección fuente):**
 
 ```javascript
 db.createRole({
   role: "RolAdminRiesgo",
-  privileges: [
-    {
-      resource: { db: "proyecto_accidentes_db", collection: "accidentes" },
-      actions: ["find", "insert", "update", "remove", "aggregate"]
-    }
-  ],
+  privileges: [{ 
+    resource: { db: "proyecto_accidentes_db", collection: "accidentes" }, 
+    actions: ["find", "insert", "update", "remove"] 
+  }],
   roles: []
 });
 
-db.createUser({
-  user: "admin_riesgo",
-  pwd: "PasswordAdminRiesgo2026",
-  roles: [ { role: "RolAdminRiesgo", db: "proyecto_accidentes_db" } ]
+db.createUser({ 
+  user: "admin_riesgo", 
+  pwd: "PasswordAdminRiesgo2026", 
+  roles: [{ role: "RolAdminRiesgo", db: "proyecto_accidentes_db" }] 
 });
 ```
 
-A diferencia de `RolAnalistaLectura`, aquí sí se incluyen `insert`, `update` y `remove` porque este rol representa a quien mantiene la colección (carga inicial, correcciones, futuras cargas incrementales) — es el único de los tres con permiso de escritura, coherente con que la matriz de privilegio mínimo solo le da esa capacidad al perfil de administración, no al de análisis.
+A diferencia de `RolAnalistaLectura`, aquí se incluyen `insert`, `update` y `remove` porque este rol representa a quien administra y mantiene la colección (carga inicial, correcciones o actualizaciones). Es el único perfil con permisos de escritura directos sobre la colección principal, cumpliendo con el principio de privilegio mínimo de asignar capacidad de modificación únicamente al rol de administración.
+
 
 **5. Rol y usuario `consulta_publica` (restringido a la vista, no a la colección fuente):**
 
 ```javascript
 db.createRole({
   role: "RolConsultaPublica",
-  privileges: [
-    {
-      resource: { db: "proyecto_accidentes_db", collection: "vista_accidentes_segura" },
-      actions: ["find", "aggregate"]
-    }
-  ],
+  privileges: [{ 
+    resource: { db: "proyecto_accidentes_db", collection: "vista_accidentes_segura" }, 
+    actions: ["find"] 
+  }],
   roles: []
 });
 
-db.createUser({
-  user: "consulta_publica",
-  pwd: "PasswordPublico2026",
-  roles: [ { role: "RolConsultaPublica", db: "proyecto_accidentes_db" } ]
+db.createUser({ 
+  user: "consulta_publica", 
+  pwd: "PasswordPublico2026", 
+  roles: [{ role: "RolConsultaPublica", db: "proyecto_accidentes_db" }] 
 });
 ```
+El `resource` de este rol apunta directamente a `vista_accidentes_segura`, **no** a la colección principal `accidentes`. Esto permite controlar el acceso a nivel de campo: aunque el usuario `consulta_publica` intente consultar la colección base, MongoDB rechaza cualquier operación `find` sobre ella porque el rol no tiene permisos en ese recurso, haciendo que la vista sea la única forma autorizada de acceder a la información.
 
-El `resource` de este rol apunta explícitamente a `vista_accidentes_segura`, **no** a `accidentes`. Esto es lo que materializa el control de acceso a nivel de campo: aunque `consulta_publica` sepa que existe la colección `accidentes`, MongoDB rechaza cualquier `find`/`aggregate` directo sobre ella porque el rol nunca recibió privilegios sobre ese recurso — la vista es la única puerta de entrada disponible.
+> Las tres contraseñas (`analista_vial`, `admin_riesgo`, `consulta_publica`) están en texto plano únicamente por ser un entorno didáctico del Learner Lab. Vale la pena declarar explícitamente en la entrega que en producción se inyectarían por variables de entorno o un gestor de secretos, y jamás quedarían commiteadas en el repo.
 
-> ⚠️ Las tres contraseñas (`analista_vial`, `admin_riesgo`, `consulta_publica`) están en texto plano únicamente por ser un entorno didáctico del Learner Lab. Vale la pena declarar explícitamente en la entrega que en producción se inyectarían por variables de entorno o un gestor de secretos, y jamás quedarían commiteadas en el repo.
+<img width="1163" height="814" alt="image" src="https://github.com/user-attachments/assets/1b375d3b-6550-4ec3-8d8d-964920bb9ac1" />
 
-*(Captura recomendada 📸: `show roles` y `show users` confirmando los tres roles/usuarios; y un intento de `db.accidentes.find()` autenticado como `consulta_publica`, mostrando el error `not authorized`, contrastado con el mismo `find()` funcionando correctamente sobre `vista_accidentes_segura`.)*
+<img width="817" height="832" alt="image" src="https://github.com/user-attachments/assets/95b8289e-1fab-450d-9785-968253391f3e" />
 
 ---
 
