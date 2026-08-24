@@ -102,9 +102,9 @@ db.accidentes.createIndex({ location: "2dsphere" });
 
 <img width="737" height="711" alt="image" src="https://github.com/user-attachments/assets/25f072c4-0cf7-40aa-be2e-984fdd29c915" />
 
-### Validación de esquema (`$jsonSchema`)
+### 3. Validación de esquema (`$jsonSchema`)
 
-Una vez cargados los datos, se añade un validador a la colección existente con `collMod` — se aplica **después** de la carga porque el dataset transformado ya cumple las reglas; así se evita rechazar accidentalmente el import masivo y en cambio se usa el validador como una barrera para inserciones/actualizaciones futuras:
+Una vez cargados los datos, aplicamos un validador a la colección existente utilizando `collMod`. Es una buena práctica ejecutarlo **después** de la ingesta masiva: así garantizamos que el dataset inicial ya cumpla con las reglas y evitamos rechazar registros durante la importación, utilizando el validador como una barrera de seguridad para operaciones futuras:
 
 ```javascript
 db.runCommand({
@@ -135,12 +135,24 @@ db.runCommand({
   validationAction: "error"
 });
 ```
-
 - **`severity` como `bsonType: "int"` con `minimum`/`maximum`** — funciona sin agregar `"double"` al tipo porque `transformar_a_mongo.py` ya fuerza el entero en la transformación (a diferencia de escribir literales directo en `mongosh`, donde sí haría falta el ajuste visto en retos anteriores).
+
 - **`validationLevel: "strict"`** — aplica la regla a *todos* los documentos, incluidos los ya existentes al momento de futuras actualizaciones; es la opción más estricta frente a `"moderate"` (que solo valida documentos que ya cumplían o son nuevos).
+
 - **`validationAction: "error"`** — rechaza la escritura inválida en vez de solo registrarla (`"warn"`), coherente con que este es un validador de producción, no de diagnóstico.
 
-*(Captura recomendada 📸: un `insertOne` con `severity: 5` o `severity: "alta"` siendo rechazado por el validador — evidencia de caso inválido — y un `insertOne` válido siendo aceptado.)*
+A continuación se muestran los ejemplos de prueba que validan el comportamiento del esquema:
+
+1. Caso inválido (rechazado por el motor): Intento de inserción con una severidad fuera del rango permitido (severity: 5), el cual arroja un error de validación (código 121):
+
+<img width="835" height="781" alt="image" src="https://github.com/user-attachments/assets/96cd5aaf-aad5-4d50-9240-1b58a2179e97" />
+
+
+2. Caso válido (aceptado por el motor): Inserción correcta cumpliendo con las reglas de tipo entero estricto (NumberInt(2)):
+(Aquí inserta tu segunda imagen con el acknowledged: true)
+
+<img width="819" height="273" alt="image" src="https://github.com/user-attachments/assets/a6e31cf5-d05f-4f44-abc0-033fa59cf938" />
+
 
 ---
 
