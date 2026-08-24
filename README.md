@@ -143,22 +143,21 @@ db.runCommand({
 
 A continuación se muestran los ejemplos de prueba que validan el comportamiento del esquema:
 
-1. Caso inválido (rechazado por el motor): Intento de inserción con una severidad fuera del rango permitido (severity: 5), el cual arroja un error de validación (código 121):
+1. Caso inválido (rechazado por el motor): Intento de inserción con una severidad fuera del rango permitido (severity: 5), el cual arroja un error de validación ("code": 121):
 
 <img width="835" height="781" alt="image" src="https://github.com/user-attachments/assets/96cd5aaf-aad5-4d50-9240-1b58a2179e97" />
 
 
-2. Caso válido (aceptado por el motor): Inserción correcta cumpliendo con las reglas de tipo entero estricto (NumberInt(2)):
-(Aquí inserta tu segunda imagen con el acknowledged: true)
+2. Caso válido (aceptado por el motor): Inserción correcta cumpliendo con las reglas de tipo entero estricto (severity: NumberInt(2)):
 
 <img width="819" height="273" alt="image" src="https://github.com/user-attachments/assets/a6e31cf5-d05f-4f44-abc0-033fa59cf938" />
 
 
 ---
 
-## 📊 Preguntas de investigación
+## Preguntas Base
 
-Cada pipeline responde una pregunta analítica definida al inicio del proyecto. El script Python resuelve la *transformación estructural*; los pipelines son donde se demuestra el razonamiento analítico exigido por la rúbrica.
+Cada pipeline de agregación da respuesta a una interrogante clave planteada para el análisis del proyecto. Partiendo de una base estructural limpia que se construyo previamente mediante scripts de Python, estas consultas despliegan todo el razonamiento analítico y el dominio de operadores requeridos por la rúbrica.
 
 ### Pregunta 1 — Zonas y condados de mayor riesgo (geoespacial/descriptivo)
 
@@ -187,12 +186,17 @@ var p1 = db.accidentes.aggregate([
   { $limit: 10 }
 ]).toArray();
 
-print("--- TOP 10 CONDADOS CON MÁS ACCIDENTES ---");
+print("--- TOP 10 ESTADOS CON MÁS ACCIDENTES ---");
 printjson(p1);
 '
 ```
 
-*(Captura recomendada 📸: salida `printjson(p1)` con las 10 filas.)*
+<img width="867" height="819" alt="image" src="https://github.com/user-attachments/assets/268ede95-52ee-491e-a54d-07afdcb655e1" />
+
+<img width="842" height="842" alt="image" src="https://github.com/user-attachments/assets/f696f710-2a39-4809-91eb-111d2e9ae0f3" />
+
+<img width="854" height="841" alt="image" src="https://github.com/user-attachments/assets/43cdfad8-918f-47b0-8bbb-d2adbaae69d3" />
+
 
 ### Pregunta 2 — Estacionalidad (meses críticos)
 
@@ -229,7 +233,12 @@ printjson(p2);
 '
 ```
 
-*(Captura recomendada 📸: salida `printjson(p2)`.)*
+<img width="866" height="732" alt="image" src="https://github.com/user-attachments/assets/814ec06a-dea7-4aae-a60a-d990b916c27f" />
+
+<img width="735" height="843" alt="image" src="https://github.com/user-attachments/assets/5763a587-580f-4b62-a268-7b2f0840a155" />
+
+<img width="679" height="829" alt="image" src="https://github.com/user-attachments/assets/6a04598c-146f-454d-b020-ce8394e3df14" />
+
 
 ### Pregunta 3 — Horarios y condiciones de luz
 
@@ -265,12 +274,17 @@ var p3 = db.accidentes.aggregate([
   { $limit: 10 }
 ]).toArray();
 
-print("--- TOP 10 HORARIOS Y LUZ CON MÁS ACCIDENTES ---");
+print("--- TOP 10 HORARIOS Y LUZ DE DÍA CON MÁS ACCIDENTES ---");
 printjson(p3);
 '
 ```
 
-*(Captura recomendada 📸: salida `printjson(p3)`.)*
+<img width="864" height="692" alt="image" src="https://github.com/user-attachments/assets/5df454b0-c1d0-4c42-8923-6a88c83366bf" />
+
+<img width="865" height="836" alt="image" src="https://github.com/user-attachments/assets/6fb75031-15a0-457a-af8d-8cbe13b9b45c" />
+
+<img width="858" height="832" alt="image" src="https://github.com/user-attachments/assets/1126358b-0b70-42ae-b974-d6c7f5a8535f" />
+
 
 ### Pregunta 4 — Impacto climático y rendimiento (`explain`)
 
@@ -294,9 +308,10 @@ printjson({
 '
 ```
 
-> 💡 **Recomendación de rúbrica:** para que el `explain` sea evidencia comparativa completa, corre también la misma consulta **antes** de crear el índice (o con `hint({ $natural: 1 })`) y documenta el `COLLSCAN` con su `totalDocsExamined` y `executionTimeMillis`. Mostrar el "antes vs. después" lado a lado es lo que demuestra la optimización, no solo el resultado final.
+> **Recomendación de rúbrica:** para que el `explain` sea evidencia comparativa completa, corre también la misma consulta **antes** de crear el índice (o con `hint({ $natural: 1 })`) y documenta el `COLLSCAN` con su `totalDocsExamined` y `executionTimeMillis`. Mostrar el "antes vs. después" lado a lado es lo que demuestra la optimización, no solo el resultado final.
 
-*(Captura recomendada 📸: dos salidas lado a lado — `COLLSCAN` sin índice vs. `IXSCAN` con índice — idealmente con el explain visualizado en Compass si lo tienes disponible.)*
+<img width="1680" height="466" alt="image" src="https://github.com/user-attachments/assets/4e294b67-f6a5-4824-b9c5-4ca875cf5c9b" />
+
 
 ### Pregunta 5 — Afectaciones críticas (búsqueda textual)
 
@@ -329,11 +344,16 @@ printjson(p5);
 '
 ```
 
-*(Captura recomendada 📸: salida `printjson(p5)` mostrando la columna `relevancia` ordenada de mayor a menor.)*
+<img width="1175" height="739" alt="image" src="https://github.com/user-attachments/assets/c9adf7f1-1ba6-49f1-9693-cf05a3b3623e" />
+
+<img width="1176" height="732" alt="image" src="https://github.com/user-attachments/assets/2e8f8453-8467-49c5-9775-d807d463622c" />
+
+<img width="1179" height="720" alt="image" src="https://github.com/user-attachments/assets/892145e8-7f2b-40d6-a1f2-1f9ec7e1e88a" />
+
 
 ---
 
-## 🔐 Seguridad, privacidad y control de acceso
+## Seguridad, privacidad y control de acceso
 
 El dataset **no contiene identificadores personales directos** (no hay nombres de conductores, placas, ni contactos), por lo que el enfoque de seguridad no es "anonimización de personas", sino **clasificación de datos y control de acceso por rol**, tal como se plantea en la Nota 08 del curso.
 
