@@ -5,7 +5,7 @@
 // datos ya cargados, y el validador con collMod se aplica sobre la
 // colección existente (no bloquea el import masivo inicial).
 
-// 1. Índice compuesto (regla ESR: Equality -> Sort) para la Pregunta 4
+// 1. Índice compuesto para la Pregunta 4
 db.accidentes.createIndex({ "weather.condition": 1, severity: -1 });
 
 // 2. Índice de texto sobre "description" para la Pregunta 5
