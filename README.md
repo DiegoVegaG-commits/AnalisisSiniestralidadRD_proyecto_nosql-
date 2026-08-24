@@ -1,26 +1,27 @@
-# 🚦 Análisis NoSQL de Siniestralidad Vial en EE. UU. (2016–2023)
+# Análisis de Base de Datos de Siniestralidad Vial en EE. UU. (2016–2023)
 
-Proyecto final del módulo **NoSQL/MongoDB** del *Diplomado en Manejo de Bases de Datos SQL y NoSQL en un Entorno de Nube* (FC–IIMAS, UNAM). El objetivo es modelar, cargar, indexar y explotar analíticamente una colección documental de accidentes de tráfico en EE. UU., aplicando el ciclo completo visto en el curso: **modelado de documentos → indexación → agregación → validación → seguridad**.
+Proyecto final del módulo **6** del *Diplomado en Manejo de Bases de Datos SQL y NoSQL en un Entorno de Nube* (FC–IIMAS, UNAM). El objetivo es modelar, cargar, indexar y explotar analíticamente una colección documental de accidentes de tráfico en EE. UU., aplicando el ciclo completo visto en el curso: **modelado de documentos → indexación → agregación → validación → seguridad**.
 
-> 📌 **Dataset fuente:** [US Accidents (2016–2023)](https://www.kaggle.com/datasets/sobhanmoosavi/us-accidents), Sobhan Moosavi (Kaggle). Se trabajó con una **muestra representativa de 27,049 registros** (semilla aleatoria `seed=42`), no con el CSV completo (685 MB), para mantener el entorno del Learner Lab manejable sin sacrificar diversidad estadística de estados, condiciones climáticas y niveles de severidad.
+> **Dataset fuente:** [US Accidents (2016–2023)](https://www.kaggle.com/datasets/sobhanmoosavi/us-accidents), Sobhan Moosavi (Kaggle). Se trabajó con una **muestra representativa (acotada a menos registros) de aproximadamente 27,049 registros**, no con el CSV completo, para mantener una base de datos manejable, pero manteniendo variedad en los estados, el clima y los niveles de severidad.
 
 ---
 
-## 📋 Requisitos previos
+## Requisitos previos
 
 | Herramienta | Uso en el proyecto |
 |---|---|
-| **MongoDB Server** (probado en Community 7.0 / AWS Academy Learner Lab) | Motor de base de datos documental |
-| **MongoDB Shell** (`mongosh`) | Ejecución de agregaciones e índices |
-| **MongoDB Database Tools** (`mongoimport`) | Carga masiva del NDJSON |
-| **Python 3** (`transformar_a_mongo.py`) | Transformación CSV → NDJSON con tipos BSON correctos |
-| Archivo fuente `accidentes_mongo.jsonl` | Datos ya transformados, listos para importar |
+| **MongoDB Server** | Motor de base de datos documental |
+| **MongoDB Shell** (`mongosh`) | Ejecución de consultas, agregaciones e índices |
+| **MongoDB Database Tools** (`mongoimport`) | Importación masiva de los datos en formato JSONL |
+| **Python 3** | Transformación de los datos de CSV a JSONL |
+| Archivo `accidentes_mongo.jsonl` | Datos transformados y listos para importar |
 
-*(Captura recomendada 📸: salida de `mongod --version` y `mongosh --version` o `mongoimport --version` confirmando el entorno del Learner Lab.)*
+En la siguiente imagen se observa el entorno de **AWS Academy Learner Lab**, donde se ejecuta `mongoimport` para importar los datos del archivo `accidentes_mongo.jsonl` a MongoDB. Se muestra que la importación se realizó correctamente, con un total de **27,049 documentos importados**.
+<img width="1680" height="327" alt="image" src="https://github.com/user-attachments/assets/ec092be9-8785-479d-bc28-6132bee5c1ec" />
 
 ---
 
-## 🧱 Modelo de datos y decisiones de diseño
+## Modelo de datos y decisiones de diseño
 
 Antes de la carga, el CSV original (columnas planas tipo `Start_Lat`, `Start_Lng`, `Temperature(F)`, `Weather_Condition`, `Amenity`, `Crossing`, etc.) se transformó con `transformar_a_mongo.py` a un modelo documental con subdocumentos anidados. Estas fueron las decisiones clave y su justificación:
 
@@ -34,7 +35,8 @@ Antes de la carga, el CSV original (columnas planas tipo `Start_Lat`, `Start_Lng
 | **`description` como texto libre** | Es el único campo candidato natural para un índice `text` y minería textual (pregunta 5). |
 | **Exclusión de un registro con latitud inválida (95)** | Una coordenada fuera del rango [-90, 90] impide crear el índice `2dsphere` sobre toda la colección; se excluyó antes de la carga en vez de "limpiar" silenciosamente en el pipeline. |
 
-*(Captura recomendada 📸: un documento de ejemplo con `db.accidentes.findOne()` mostrando la estructura anidada ya cargada.)*
+<img width="1669" height="882" alt="image" src="https://github.com/user-attachments/assets/d5265d8f-bfa5-4cb1-8ebb-49e4df1ac573" />
+
 
 ---
 
