@@ -4,8 +4,7 @@ Proyecto final del **Módulo 6** del *Diplomado en Manejo de Bases de Datos SQL 
 
 El proyecto modela, carga, valida, indexa y analiza una colección documental de accidentes viales. Integra **agregaciones, índices, validación, análisis temporal y textual, minimización de datos y privilegio mínimo**.
 
-> **Fuente:** *US Accidents (2016–2023)*, Sobhan Moosavi (Kaggle). Se trabajó con una muestra de **27,049 registros**. Los resultados describen esta muestra y no representan cifras oficiales de todos los accidentes de EE. UU.
-
+> **Fuente:** *US Accidents (2016–2023)*, Sobhan Moosavi (Kaggle). Se trabajó con una muestra de **27,049 registros**. Los resultados describen esta muestra para el proyecto
 ---
 
 ## Problema, usuarios y preguntas
