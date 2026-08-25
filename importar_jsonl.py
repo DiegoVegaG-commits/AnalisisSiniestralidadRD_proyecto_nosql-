@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 """Carga reproducible de accidentes_mongo.jsonl en MongoDB.
-
-No guarda contraseñas en el código. Solicita las credenciales durante la ejecución.
-Pensado como alternativa cuando `mongoimport` no está disponible en Learner Lab.
 """
 
 from __future__ import annotations
