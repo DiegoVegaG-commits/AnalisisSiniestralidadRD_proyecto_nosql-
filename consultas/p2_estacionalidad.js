@@ -13,7 +13,7 @@ var fin = ISODate("2022-02-01T00:00:00Z");
 
 var temporalExplain = db.accidentes.find({
   start_time: { $gte: inicio, $lt: fin }
-}).hint("idx_start_time").explain("executionStats");
+}).hint("idx_fecha_inicio").explain("executionStats");
 
 print("--- PRUEBA TEMPORAL [2022-01-01, 2022-02-01) ---");
 printjson({

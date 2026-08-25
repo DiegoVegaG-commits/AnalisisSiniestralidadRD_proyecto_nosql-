@@ -104,9 +104,9 @@ Se crean los siguientes índices:
 
 ```javascript
 { "weather.condition": 1, severity: -1 } // idx_clima_severidad
-{ description: "text" }                 // idx_description_text
-{ location: "2dsphere" }                // idx_location_2dsphere
-{ start_time: 1 }                        // idx_start_time
+{ description: "text" }                 // idx_descripcion_texto
+{ location: "2dsphere" }                // idx_ubicacion_2dsphere
+{ start_time: 1 }                        // idx_fecha_inicio
 ```
 
 - El compuesto clima + severidad se usa en la Pregunta 4.
@@ -164,7 +164,7 @@ start_time: {
 }
 ```
 
-El intervalo incluye el inicio de enero y excluye el inicio de febrero. La consulta usa `idx_start_time` y muestra `explain("executionStats")` para documentar documentos, llaves examinadas y plan ganador.
+El intervalo incluye el inicio de enero y excluye el inicio de febrero. La consulta usa `idx_fecha_inicio` y muestra `explain("executionStats")` para documentar documentos, llaves examinadas y plan ganador.
 
 ### B. Pipeline mensual
 
@@ -320,7 +320,7 @@ Para la entrega final se recomienda conservar **cinco capturas**, todas legibles
 
 1. **Consulta principal:** salida de `p1_zonas_riesgo.js`.
 2. **Índices + validación:** `getIndexes()` mostrando los cuatro índices y las dos pruebas del validador.
-3. **Temporal:** intervalo `[2022-01-01, 2022-02-01)` con `idx_start_time` y resultado mensual.
+3. **Temporal:** intervalo `[2022-01-01, 2022-02-01)` con `idx_fecha_inicio` y resultado mensual.
 4. **Especializado textual:** salida de `p5_busqueda_textual.js` con `textScore`.
 5. **Seguridad:** creación de vista/roles sin contraseñas; aclarar si el control de acceso está deshabilitado.
 

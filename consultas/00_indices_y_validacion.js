@@ -11,20 +11,20 @@ db.accidentes.createIndex(
 // 2) Índice de texto requerido por $text en la Pregunta 5.
 db.accidentes.createIndex(
   { description: "text" },
-  { name: "idx_description_text" }
+  { name: "idx_descripcion_texto" }
 );
 
 // 3) Índice geoespacial. El proyecto conserva GeoJSON para consultas espaciales futuras;
 //    las preguntas actuales agrupan geográficamente por estado/condado y no usan 2dsphere.
 db.accidentes.createIndex(
   { location: "2dsphere" },
-  { name: "idx_location_2dsphere" }
+  { name: "idx_ubicacion_2dsphere" }
 );
 
 // 4) Índice temporal acorde con las consultas de intervalo [inicio, fin).
 db.accidentes.createIndex(
   { start_time: 1 },
-  { name: "idx_start_time" }
+  { name: "idx_fecha_inicio" }
 );
 
 print("\n--- ÍNDICES DISPONIBLES (getIndexes) ---");
