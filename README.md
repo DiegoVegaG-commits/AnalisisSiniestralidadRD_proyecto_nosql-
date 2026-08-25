@@ -1,493 +1,278 @@
-# Análisis de Base de Datos de Siniestralidad Vial en EE. UU. (2016–2023)
+# Análisis de Siniestralidad Vial con MongoDB
 
-Proyecto final del módulo **6** del *Diplomado en Manejo de Bases de Datos SQL y NoSQL en un Entorno de Nube* (FC–IIMAS, UNAM). El objetivo es modelar, cargar, indexar y explotar analíticamente una colección documental de accidentes de tráfico en EE. UU., aplicando el ciclo completo visto en el curso: **modelado de documentos → indexación → agregación → validación → seguridad**.
+Proyecto final del **Módulo 6** del *Diplomado en Manejo de Bases de Datos SQL y NoSQL en un Entorno de Nube* (FC–IIMAS, UNAM).
 
-> **Dataset fuente:** [US Accidents (2016–2023)](https://www.kaggle.com/datasets/sobhanmoosavi/us-accidents), Sobhan Moosavi (Kaggle). Se trabajó con una **muestra representativa (acotada a menos registros) de aproximadamente 27,049 registros**, no con el CSV completo, para mantener una base de datos manejable, pero manteniendo variedad en los estados, el clima y los niveles de severidad.
+El proyecto modela, carga, valida, indexa y analiza una colección documental de accidentes viales. Integra **agregaciones, índices, validación, análisis temporal y textual, minimización de datos y privilegio mínimo**.
 
----
-
-## Requisitos previos
-
-| Herramienta | Uso en el proyecto |
-|---|---|
-| **MongoDB Server** | Motor de base de datos documental |
-| **MongoDB Shell** (`mongosh`) | Ejecución de consultas, agregaciones e índices |
-| **MongoDB Database Tools** (`mongoimport`) | Importación masiva de los datos en formato JSONL |
-| **Python 3** | Transformación de los datos de CSV a JSONL |
-| Archivo `accidentes_mongo.jsonl` | Datos transformados y listos para importar |
-
-En la siguiente imagen se observa el entorno de **AWS Academy Learner Lab**, donde se ejecuta `mongoimport` para importar los datos del archivo `accidentes_mongo.jsonl` a MongoDB. Se muestra que la importación se realizó correctamente, con un total de **27,049 documentos importados**.
-<img width="1680" height="327" alt="image" src="https://github.com/user-attachments/assets/ec092be9-8785-479d-bc28-6132bee5c1ec" />
+> **Fuente:** *US Accidents (2016–2023)*, Sobhan Moosavi (Kaggle). Se trabajó con una muestra de **27,049 registros**. Los resultados describen esta muestra y no representan cifras oficiales de todos los accidentes de EE. UU.
 
 ---
 
-## Modelo de datos y decisiones de diseño
+## Problema, usuarios y preguntas
 
-Antes de la carga, el CSV original (columnas planas tipo `Start_Lat`, `Start_Lng`, `Temperature(F)`, `Weather_Condition`, `Amenity`, `Crossing`, etc.) se transformó con `transformar_a_mongo.py` a un modelo documental con subdocumentos anidados. Estas fueron las decisiones clave y su justificación:
+Los datos en bruto no permiten reconocer con facilidad dónde, cuándo y bajo qué condiciones se concentra el riesgo. Los resultados están dirigidos a analistas de vialidad, dependencias de tránsito y equipos de respuesta a emergencias.
 
-| Decisión | Por qué se hizo así |
-|---|---|
-| **`location` como GeoJSON Point** `{ type: "Point", coordinates: [lng, lat] }` | MongoDB exige el orden **longitud–latitud** (no lat-lng) para poder crear un índice `2dsphere` y usar operadores geoespaciales (`$geoWithin`, `$near`) más adelante. Solo se usó `Start_Lat`/`Start_Lng`, porque `End_Lat`/`End_Lng` venían nulos en la mayoría de los registros del CSV original. |
-| **`start_time` / `end_time` como `ISODate` (BSON Date)**, no string | Permite usar operadores de rango, `$dateToString`, y extracción de mes/hora directamente en el pipeline (preguntas 2 y 3), en vez de parsear texto en cada consulta. |
-| **`severity` forzado a entero explícito** | mongosh inserta literales numéricos como BSON `double` por defecto. Un validador `$jsonSchema` con `bsonType: "int"` rechazaría documentos válidos si no se fuerza el tipo en la transformación (mismo problema detectado en retos anteriores del curso). |
-| **Subdocumentos `address`, `weather`, `road_features`** en vez de campos planos | Agrupan atributos que siempre se consultan juntos (1:1 con el accidente). Al no requerir `$lookup` —porque no hay relación con otra colección—, el *embedding* es preferible sobre la referencia: reduce joins y refleja el patrón de "datos que cambian y se leen juntos". |
-| **`road_features` como banderas booleanas agrupadas** (`amenity`, `crossing`, `junction`, `traffic_signal`) | Más legible para el validador y las consultas que columnas sueltas tipo `Amenity`, `Crossing`, etc. del CSV original. |
-| **`description` como texto libre** | Es el único campo candidato natural para un índice `text` y minería textual (pregunta 5). |
-| **Exclusión de un registro con latitud inválida (95)** | Una coordenada fuera del rango [-90, 90] impide crear el índice `2dsphere` sobre toda la colección; se excluyó antes de la carga en vez de "limpiar" silenciosamente en el pipeline. |
+1. ¿Cuáles son las zonas con mayor frecuencia y severidad promedio de accidentes?
+2. ¿Cuáles son los meses que concentran más accidentes y mayor severidad?
+3. ¿En qué horarios y condiciones de luz ocurren más accidentes?
+4. ¿Cómo se relacionan las condiciones climáticas con la severidad?
+5. ¿Qué accidentes de alta severidad son más relevantes para términos asociados con bloqueos y cierres viales?
 
-<img width="1669" height="882" alt="image" src="https://github.com/user-attachments/assets/d5265d8f-bfa5-4cb1-8ebb-49e4df1ac573" />
-
+La Pregunta 5 utiliza **relevancia textual con `$text` y `textScore`**; no calcula frecuencia global de palabras ni búsqueda semántica/vectorial.
 
 ---
 
-## Orden de ejecución y reproducción
+## Modelo documental
 
-Sigue estos pasos en tu terminal para reproducir el entorno y los resultados desde cero.
+La colección principal es `accidentes`.
 
-### Resumen rápido 
-
-| # | Archivo / Comando | Qué hace |
+| Campo | Diseño | Uso |
 |---|---|---|
-| 1 | `transformar_a_mongo.py` | Procesa y estructura el CSV fuente, generando `accidentes_mongo.jsonl` con formato GeoJSON y tipos nativos BSON. |
-| 2 | Comando `mongoimport` | Realiza la ingesta de los 27,049 documentos en la base `proyecto_accidentes_db` dentro de la colección `accidentes`. |
-| 3 | `consultas/00_indices_y_validacion.js` | Aplica la regla `$jsonSchema` a la colección y genera los índices `2dsphere`, texto y compuesto (`weather.condition` + `severity`). |
-| 4 | `seguridad/vista_publica.js` | Crea `vista_accidentes_segura` aplicando `$project` para minimización de datos (requerida previamente para el paso 5). |
-| 5 | `seguridad/roles_y_usuarios.js` | Define los roles (`RolAdminRiesgo`, `RolAnalistaLectura`, `RolConsultaPublica`) y crea los usuarios correspondientes aplicando el principio de menor privilegio. |
-| 6 | `consultas/p1_zonas_riesgo.js` a `p5_busqueda_textual.js` | Ejecuta de forma independiente los 5 pipelines de agregación para responder a las preguntas de análisis vial. |
+| `severity` | `int`, escala 1–4 | Métricas y validación |
+| `start_time` | BSON `Date` | Rangos y agrupaciones temporales |
+| `location` | GeoJSON `Point [lng, lat]` | Índice `2dsphere` |
+| `address`, `weather`, `road_features` | Subdocumentos embebidos | Lectura conjunta con el accidente |
+| `description` | Texto libre | Índice `text` y `$text` |
 
-Cada script de `consultas/` y `seguridad/` se ejecuta así (ejemplo con p1):
+### Nota temporal
+
+El flujo conserva una representación uniforme con sufijo `Z`. Esto **no demuestra una conversión desde la zona horaria local original de cada estado**, por lo que el análisis horario se interpreta sobre la representación almacenada.
+
+---
+
+## Orden de ejecución
+
+1. Preparar `accidentes_mongo.jsonl` con `transformar_a_mongo.py` si se parte del CSV.
+2. Cargar los 27,049 documentos.
+3. Ejecutar `consultas/00_indices_y_validacion.js`.
+4. Ejecutar `seguridad/vista_publica.js` y `seguridad/roles_y_usuarios.js` con control de acceso habilitado.
+5. Ejecutar `consultas/p1_zonas_riesgo.js` a `consultas/p5_busqueda_textual.js`.
+
+### Carga en Learner Lab sin `mongoimport`
+
+El repositorio incluye `importar_jsonl.py`, que solicita la contraseña sin almacenarla:
 
 ```bash
-./.tools/bin/mongosh "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" consultas/p1_zonas_riesgo.js
+python3 importar_jsonl.py
 ```
 
-A continuación, el detalle y justificación de cada paso (el código de esta sección es equivalente al de los archivos del repo, mostrado aquí para que se entienda sin tener que abrir cada archivo):
+Resultado verificado:
 
-### 1. Carga de los datos
-
-Este comando importa los 27,049 registros a la colección `accidentes` dentro de la base `proyecto_accidentes_db`:
-
-```bash
-mongoimport --uri "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" \
-  --collection accidentes \
-  --file proyecto_final/accidentes_mongo.jsonl
+```text
+IMPORTACIÓN TERMINADA: 27049 documentos
+Conteo MongoDB: 27049
 ```
 
-<img width="1249" height="192" alt="image" src="https://github.com/user-attachments/assets/5a8c8981-b891-4000-8635-8a8883cf7b09" />
-
-
-### 2. Creación de índices
-
-Implementamos tres índices con propósitos específicos para optimizar las consultas del proyecto:
-
-```javascript
-mongosh "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" --quiet --eval '
-db.accidentes.createIndex({ "weather.condition": 1, severity: -1 });
-db.accidentes.createIndex({ description: "text" });
-print("Índices creados correctamente.");
-'
-```
-
-- **`{ "weather.condition": 1, severity: -1 }`** — índice compuesto siguiendo la **regla ESR** (Equality → Sort → Range): `weather.condition` filtra por igualdad y `severity` ordena/filtra por rango. Este es el índice que sostiene la Pregunta 4.
-- **`{ description: "text" }`** — único tipo de índice que permite tokenizar y buscar lenguaje natural con `$text`, necesario para la Pregunta 5. No sustituye a un índice regular: no soporta ordenamiento por otros campos ni igualdad eficiente por sí solo.
-
-Adicionalmente, se crea un índice **`2dsphere`** sobre `location`, indispensable para que la Pregunta 1 (y cualquier consulta geoespacial futura con `$geoWithin`/`$near`) no dependa de un `COLLSCAN` filtrando manualmente por coordenadas:
-
-```javascript
-// Índice espacial sobre el subdocumento location (formato GeoJSON)
-db.accidentes.createIndex({ location: "2dsphere" });
-```
-
-> Este índice solo puede crearse porque durante la transformación se excluyó el registro con latitud inválida (95°); un `2dsphere` falla si existe algún documento con coordenadas fuera de rango.
-
-<img width="737" height="711" alt="image" src="https://github.com/user-attachments/assets/25f072c4-0cf7-40aa-be2e-984fdd29c915" />
-
-### 3. Validación de esquema (`$jsonSchema`)
-
-Una vez cargados los datos, aplicamos un validador a la colección existente utilizando `collMod`. Es una buena práctica ejecutarlo **después** de la ingesta masiva: así garantizamos que el dataset inicial ya cumpla con las reglas y evitamos rechazar registros durante la importación, utilizando el validador como una barrera de seguridad para operaciones futuras:
-
-```javascript
-db.runCommand({
-  collMod: "accidentes",
-  validator: {
-    $jsonSchema: {
-      bsonType: "object",
-      required: ["severity", "start_time", "location"],
-      properties: {
-        severity: {
-          bsonType: "int",
-          minimum: 1,
-          maximum: 4,
-          description: "La severidad debe ser un entero entre 1 y 4 y es requerida."
-        },
-        start_time: {
-          bsonType: "date",
-          description: "Debe ser una fecha nativa BSON Date (ISODate) y es requerida."
-        },
-        location: {
-          bsonType: "object",
-          description: "Debe ser un subdocumento (GeoJSON) y es requerido."
-        }
-      }
-    }
-  },
-  validationLevel: "strict",
-  validationAction: "error"
-});
-```
-- **`severity` como `bsonType: "int"` con `minimum`/`maximum`** — funciona sin agregar `"double"` al tipo porque `transformar_a_mongo.py` ya fuerza el entero en la transformación (a diferencia de escribir literales directo en `mongosh`, donde sí haría falta el ajuste visto en retos anteriores).
-
-- **`validationLevel: "strict"`** — aplica la regla a *todos* los documentos, incluidos los ya existentes al momento de futuras actualizaciones; es la opción más estricta frente a `"moderate"` (que solo valida documentos que ya cumplían o son nuevos).
-
-- **`validationAction: "error"`** — rechaza la escritura inválida en vez de solo registrarla (`"warn"`), coherente con que este es un validador de producción, no de diagnóstico.
-
-A continuación se muestran los ejemplos de prueba que validan el comportamiento del esquema:
-
-1. Caso inválido (rechazado por el motor): Intento de inserción con una severidad fuera del rango permitido (severity: 5), el cual arroja un error de validación ("code": 121):
-
-<img width="835" height="781" alt="image" src="https://github.com/user-attachments/assets/96cd5aaf-aad5-4d50-9240-1b58a2179e97" />
-
-
-2. Caso válido (aceptado por el motor): Inserción correcta cumpliendo con las reglas de tipo entero estricto (severity: NumberInt(2)):
-
-<img width="819" height="273" alt="image" src="https://github.com/user-attachments/assets/a6e31cf5-d05f-4f44-abc0-033fa59cf938" />
-
+Si `mongoimport` está disponible también puede utilizarse; el script Python se conserva como alternativa reproducible para el Learner Lab utilizado.
 
 ---
 
-## Preguntas Base
+## Índices y validación
 
-Cada pipeline de agregación da respuesta a una interrogante clave planteada para el análisis del proyecto. Partiendo de una base estructural limpia que se construyo previamente mediante scripts de Python, estas consultas despliegan todo el razonamiento analítico y el dominio de operadores requeridos por la rúbrica.
-
-### Pregunta 1 — Zonas y condados de mayor riesgo (geoespacial/descriptivo)
-
-Agrupa por estado y condado, sumando accidentes y promediando severidad, para identificar las zonas de mayor concentración de siniestros.
+Los nombres se mantienen en español; los campos conservan sus nombres originales del dataset.
 
 ```javascript
-mongosh "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" --quiet --eval '
-var p1 = db.accidentes.aggregate([
-  {
-    $group: {
-      _id: { estado: "$address.state", condado: "$address.county" },
-      totalAccidentes: { $sum: 1 },
-      severidadMedia: { $avg: "$severity" }
-    }
-  },
-  {
-    $project: {
-      estado: "$_id.estado",
-      condado: "$_id.condado",
-      totalAccidentes: 1,
-      severidadPromedio: { $round: ["$severidadMedia", 2] },
-      _id: 0
-    }
-  },
-  { $sort: { totalAccidentes: -1 } },
-  { $limit: 10 }
-]).toArray();
-
-print("--- TOP 10 ESTADOS CON MÁS ACCIDENTES ---");
-printjson(p1);
-'
+{ "weather.condition": 1, severity: -1 } // idx_clima_severidad
+{ description: "text" }                 // idx_descripcion_texto
+{ location: "2dsphere" }                // idx_ubicacion_2dsphere
+{ start_time: 1 }                        // idx_fecha_inicio
 ```
 
-<img width="867" height="819" alt="image" src="https://github.com/user-attachments/assets/268ede95-52ee-491e-a54d-07afdcb655e1" />
+`db.accidentes.getIndexes()` comprobó la existencia de los cuatro índices.
 
-<img width="842" height="842" alt="image" src="https://github.com/user-attachments/assets/f696f710-2a39-4809-91eb-111d2e9ae0f3" />
+![Índices](capturas/02_indices_getIndexes.png)
 
-<img width="854" height="841" alt="image" src="https://github.com/user-attachments/assets/43cdfad8-918f-47b0-8bbb-d2adbaae69d3" />
+El `$jsonSchema` exige:
 
+- `severity`: BSON `int`, rango 1–4.
+- `start_time`: BSON `date`.
+- `location`: objeto GeoJSON `Point` con `coordinates`.
 
-### Pregunta 2 — Estacionalidad (meses críticos)
+Pruebas verificadas:
 
-Extrae el mes de `start_time` con `$dateToString` en zona horaria **UTC** —para evitar sesgos por husos horarios mezclados de distintos estados— y calcula frecuencia y rango de severidad por mes.
-
-```javascript
-mongosh "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" --quiet --eval '
-var p2 = db.accidentes.aggregate([
-  {
-    $group: {
-      _id: { $dateToString: { format: "%m", date: "$start_time", timezone: "UTC" } },
-      totalAccidentes: { $sum: 1 },
-      severidadMedia: { $avg: "$severity" },
-      severidadMinima: { $min: "$severity" },
-      severidadMaxima: { $max: "$severity" }
-    }
-  },
-  {
-    $project: {
-      mes: "$_id",
-      totalAccidentes: 1,
-      severidadPromedio: { $round: ["$severidadMedia", 2] },
-      severidadMinima: 1,
-      severidadMaxima: 1,
-      _id: 0
-    }
-  },
-  { $sort: { totalAccidentes: -1 } },
-  { $limit: 10 }
-]).toArray();
-
-print("--- TOP 10 MESES CON MÁS ACCIDENTES ---");
-printjson(p2);
-'
+```text
+OK: el documento válido fue aceptado.
+OK: el documento inválido fue rechazado por el validador.
+Código esperado de validación: 121
 ```
-
-<img width="866" height="732" alt="image" src="https://github.com/user-attachments/assets/814ec06a-dea7-4aae-a60a-d990b916c27f" />
-
-<img width="735" height="843" alt="image" src="https://github.com/user-attachments/assets/5763a587-580f-4b62-a268-7b2f0840a155" />
-
-<img width="679" height="829" alt="image" src="https://github.com/user-attachments/assets/6a04598c-146f-454d-b020-ce8394e3df14" />
-
-
-### Pregunta 3 — Horarios y condiciones de luz
-
-Cruza la hora exacta (extraída en UTC, igual criterio que la pregunta 2 para consistencia) con `sunrise_sunset`, para identificar si el riesgo se concentra en horarios nocturnos o de baja visibilidad.
-
-```javascript
-mongosh "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" --quiet --eval '
-var p3 = db.accidentes.aggregate([
-  {
-    $project: {
-      horaUTC: { $dateToString: { format: "%H", date: "$start_time", timezone: "UTC" } },
-      sunrise_sunset: 1,
-      severity: 1
-    }
-  },
-  {
-    $group: {
-      _id: { hora: "$horaUTC", periodoLuz: "$sunrise_sunset" },
-      totalAccidentes: { $sum: 1 },
-      severidadMedia: { $avg: "$severity" }
-    }
-  },
-  {
-    $project: {
-      hora: "$_id.hora",
-      periodoLuz: "$_id.periodoLuz",
-      totalAccidentes: 1,
-      severidadPromedio: { $round: ["$severidadMedia", 2] },
-      _id: 0
-    }
-  },
-  { $sort: { totalAccidentes: -1 } },
-  { $limit: 10 }
-]).toArray();
-
-print("--- TOP 10 HORARIOS Y LUZ DE DÍA CON MÁS ACCIDENTES ---");
-printjson(p3);
-'
-```
-
-<img width="864" height="692" alt="image" src="https://github.com/user-attachments/assets/5df454b0-c1d0-4c42-8923-6a88c83366bf" />
-
-<img width="865" height="836" alt="image" src="https://github.com/user-attachments/assets/6fb75031-15a0-457a-af8d-8cbe13b9b45c" />
-
-<img width="858" height="832" alt="image" src="https://github.com/user-attachments/assets/1126358b-0b70-42ae-b974-d6c7f5a8535f" />
-
-
-### Pregunta 4 — Impacto climático y rendimiento (`explain`)
-
-Valida que el índice compuesto `{ "weather.condition": 1, severity: -1 }` efectivamente se use al filtrar por clima y severidad. `.explain("executionStats")` es la evidencia formal de que la consulta pasó de un **`COLLSCAN`** (revisar los 27,049 documentos uno por uno) a un **`IXSCAN`** (usar el índice para llegar directo a los candidatos).
-
-```javascript
-mongosh "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" --quiet --eval '
-var p4_optimizado = db.accidentes.find({
-  "weather.condition": "Rain",
-  severity: { $gte: 3 }
-}).explain("executionStats");
-
-print("--- RENDIMIENTO OPTIMIZADO CON ÍNDICE (IXSCAN) ---");
-printjson({
-  "etapa_raiz": p4_optimizado.executionStats.executionStages.stage,
-  "etapa_busqueda": p4_optimizado.executionStats.executionStages.inputStage.stage,
-  "tiempo_ejecucion_ms": p4_optimizado.executionStats.executionTimeMillis,
-  "documentos_examinados": p4_optimizado.executionStats.totalDocsExamined,
-  "documentos_devueltos": p4_optimizado.executionStats.nReturned
-});
-'
-```
-
-> **Recomendación de rúbrica:** para que el `explain` sea evidencia comparativa completa, corre también la misma consulta **antes** de crear el índice (o con `hint({ $natural: 1 })`) y documenta el `COLLSCAN` con su `totalDocsExamined` y `executionTimeMillis`. Mostrar el "antes vs. después" lado a lado es lo que demuestra la optimización, no solo el resultado final.
-
-<img width="1680" height="466" alt="image" src="https://github.com/user-attachments/assets/4e294b67-f6a5-4824-b9c5-4ca875cf5c9b" />
-
-
-### Pregunta 5 — Afectaciones críticas (búsqueda textual)
-
-Usa el índice `text` sobre `description` para localizar accidentes de alta severidad (`severity >= 3`) cuya descripción menciona cierres de vialidad, y ordena por relevancia textual con `$meta: "textScore"` — no es lo mismo que ordenar por severidad: aquí el orden refleja qué tan bien coincide el texto con los términos buscados.
-
-```javascript
-mongosh "mongodb://127.0.0.1:27017/proyecto_accidentes_db?directConnection=true" --quiet --eval '
-var p5 = db.accidentes.aggregate([
-  {
-    $match: {
-      $text: { $search: "blocked lane ramp closed" },
-      severity: { $gte: 3 }
-    }
-  },
-  {
-    $project: {
-      estado: "$address.state",
-      severidad: "$severity",
-      descripcion: "$description",
-      relevancia: { $meta: "textScore" },
-      _id: 0
-    }
-  },
-  { $sort: { relevancia: -1 } },
-  { $limit: 10 }
-]).toArray();
-
-print("--- TOP 10 INCIDENTES CRÍTICOS POR RELEVANCIA DE TEXTO ---");
-printjson(p5);
-'
-```
-
-<img width="1175" height="739" alt="image" src="https://github.com/user-attachments/assets/c9adf7f1-1ba6-49f1-9693-cf05a3b3623e" />
-
-<img width="1176" height="732" alt="image" src="https://github.com/user-attachments/assets/2e8f8453-8467-49c5-9775-d807d463622c" />
-
-<img width="1179" height="720" alt="image" src="https://github.com/user-attachments/assets/892145e8-7f2b-40d6-a1f2-1f9ec7e1e88a" />
-
 
 ---
 
-## Seguridad, privacidad y control de acceso
+## Pregunta 1 — Zonas con mayor volumen
 
-Aunque este dataset no tiene datos personales real (no hay nombres de conductores, placas ni teléfonos), la seguridad sigue siendo importante. Aquí el enfoque no es proteger la identidad de personas, sino **clasificar los datos y definir quién puede ver qué**, siguiendo las mejores prácticas del curso.
+`p1_zonas_riesgo.js` agrupa por `address.state` y `address.county`, calcula total y severidad promedio y ordena por volumen.
 
-### Clasificación de la información
+Resultados principales:
 
-| Campo | Nivel | Por qué se clasificó así |
+| Zona | Accidentes | Severidad promedio |
+|---|---:|---:|
+| Los Angeles, CA | 1,847 | 2.21 |
+| Miami-Dade, FL | 891 | 2.07 |
+| Harris, TX | 634 | 2.21 |
+| Dallas, TX | 555 | 2.32 |
+
+La consulta es **geográfica por atributos**, no geoespacial; no utiliza `location` ni operadores como `$near` o `$geoWithin`.
+
+![Consulta principal](capturas/01_consulta_principal.png)
+
+---
+
+## Pregunta 2 — Estacionalidad e intervalo temporal
+
+La prueba por intervalo usa la convención `[inicio, fin)`:
+
+```javascript
+start_time: {
+  $gte: ISODate("2022-01-01T00:00:00Z"),
+  $lt: ISODate("2022-02-01T00:00:00Z")
+}
+```
+
+Con `idx_fecha_inicio` y `explain("executionStats")` se obtuvo:
+
+```text
+documentosDevueltos: 476
+documentosExaminados: 476
+llavesExaminadas: 476
+plan: IXSCAN
+indexName: idx_fecha_inicio
+```
+
+Meses con mayor volumen:
+
+1. Diciembre — **2,951**
+2. Enero — **2,638**
+3. Noviembre — **2,621**
+
+---
+
+## Pregunta 3 — Horarios y luz
+
+Mayores concentraciones observadas:
+
+| Hora | Accidentes | Luz | Severidad promedio |
+|---|---:|---|---:|
+| 08:00 | 2,038 | Day | 2.19 |
+| 16:00 | 1,934 | Day | 2.21 |
+| 07:00 | 1,827 | Day | 2.19 |
+| 15:00 | 1,820 | Day | 2.20 |
+
+Estos horarios corresponden a la representación temporal almacenada; no se afirma una reconstrucción de hora local por estado.
+
+---
+
+## Pregunta 4 — Clima y rendimiento
+
+El pipeline compara condiciones climáticas mediante total de accidentes, severidad promedio, número de accidentes con `severity >= 3` y porcentaje de alta severidad.
+
+Ejemplos medidos:
+
+| Condición | Total | Alta severidad | % alta severidad |
+|---|---:|---:|---:|
+| Fair | 8,910 | 1,022 | 11.47% |
+| Clear | 2,757 | 922 | 33.44% |
+| Mostly Cloudy | 3,462 | 747 | 21.58% |
+| Overcast | 1,349 | 478 | 35.43% |
+| Rain | 295 | 73 | 24.75% |
+
+### `COLLSCAN` vs `IXSCAN`
+
+Para:
+
+```javascript
+{ "weather.condition": "Rain", severity: { $gte: 3 } }
+```
+
+se comprobó:
+
+| Plan | Docs examinados | Llaves | Devueltos |
+|---|---:|---:|---:|
+| `COLLSCAN` forzado | 27,049 | 0 | 73 |
+| `IXSCAN` con `idx_clima_severidad` | 73 | 73 | 73 |
+
+![Explain](capturas/03_explain_clima.png)
+
+Se reportan los valores medidos; no se afirma un “100% de eficiencia” ni una reducción exponencial sin una métrica formal.
+
+---
+
+## Pregunta 5 — Relevancia textual
+
+```javascript
+$text: { $search: "blocked lane ramp closed" }
+```
+
+se combina con `severity >= 3`, se proyecta `$meta: "textScore"` y se ordena por **relevancia textual**.
+
+![Búsqueda textual](capturas/04_busqueda_textual.png)
+
+Se prefirió `$text` frente a un `$regex` no anclado porque el proyecto necesita búsqueda de lenguaje libre con índice especializado y ranking por `textScore`.
+
+---
+
+## Componente geoespacial
+
+`location` conserva GeoJSON `Point` y `idx_ubicacion_2dsphere`. El índice queda listo para futuras extensiones con `$near`, `$geoWithin` o `$geoIntersects`, pero no se fuerza su uso en las cinco preguntas actuales porque los componentes temporal y textual responden mejor al problema delimitado.
+
+---
+
+## Seguridad, privacidad y privilegio mínimo
+
+### Clasificación y minimización
+
+| Campo | Nivel |
+|---|---|
+| `address.state`, `address.county`, `weather.*`, `severity` | Público |
+| `location`, `address.street` | Interno / cuasi-identificador |
+| `description` | Interno, texto libre |
+
+`vista_accidentes_segura` excluye `location` y `address.street`.
+
+### Roles
+
+| Rol / usuario | Acciones | Recurso |
 |---|---|---|
-| `address.state`, `address.county`, `weather.*`, `severity`, mes y hora | Público | Son datos generales que no permiten rastrear una ubicación exacta ni a personas. |
-| `location` (coordenadas exactas), `address.street` | Interno / sensible | Las coordenadas exactas combinadas con la hora precisa podrían usarse para ubicar el punto exacto de un choque en la vía pública. |
-| `description` (texto libre) | Interno | Es generado automáticamente, pero a veces menciona referencias a lugares muy específicos que reducen el anonimato. |
+| `RolAdminRiesgo` / `admin_riesgo` | `find`, `insert`, `update`, `remove` | `accidentes` |
+| `RolAnalistaLectura` / `analista_vial` | `find` | `accidentes` |
+| `RolConsultaPublica` / `consulta_publica` | `find` | `vista_accidentes_segura` |
 
-### Nuestro modelo de tres roles
-
-Para ordenar los accesos, planteamos tres perfiles claros:
-
-| Rol | Qué nivel de acceso tiene | Sobre qué recursos opera |
-|---|---|---|
-| `admin_riesgo` | Lectura y escritura total, además de gestionar índices y validaciones. | Toda la colección de `accidentes`. |
-| `analista` | Lectura completa (incluyendo coordenadas exactas y descripciones) para armar los pipelines de las 5 preguntas. | Toda la colección de `accidentes`. |
-| `consulta_publica` | Solo lectura, pero limitada estrictamente a campos generales (sin coordenadas exactas ni calles). | Una **vista de MongoDB** en el servidor, no la colección original. |
-
-**¿Por qué usamos una vista en lugar de filtrar desde la app?** 
-Porque crear una vista (`db.createView`) hace que el servidor de la base de datos se encargue de recortar los campos. Así, aunque un usuario con rol público intente hacer trampa desde el cliente pidiendo más información, la base de datos simplemente se la va a negar. Confiar en que la aplicación web oculte los datos por código es una mala práctica, porque el filtro se puede romper fácilmente.
-
-### Implementación: rol, usuario y vista
-
-**1. Creación del rol para el analista de datos (aplicando el principio de privilegio mínimo con permisos de `find` y `aggregate`, sin facultades de escritura ni administración):**
+Las contraseñas no están hardcodeadas; `roles_y_usuarios.js` utiliza:
 
 ```javascript
-db.createRole({
-  role: "RolAnalistaLectura",
-  privileges: [
-    {
-      resource: { db: "proyecto_accidentes_db", collection: "accidentes" },
-      actions: ["find", "aggregate"]
-    }
-  ],
-  roles: []
-});
+pwd: passwordPrompt()
 ```
 
-- **Limitamos las acciones estrictamente a `find` y `aggregate`.** Con esto, el usuario puede ejecutar perfectamente los pipelines de nuestras 5 preguntas de investigación, pero queda completamente bloqueado para modificar documentos (`update`/`insert`/`remove`) o alterar la estructura de índices y validadores. Esto implementa directamente el perfil de `analista` que definimos en la matriz de seguridad.
+### Denegaciones comprobadas
 
-**2. Usuario asociado al rol:**
+En la ejecución final MongoDB se levantó con control de acceso habilitado (`--auth`). Se verificó que:
 
-```javascript
-db.createUser({
-  user: "analista_vial",
-  pwd: "PasswordAnalista2026", // En producción esto se inyecta por variables de entorno
-  roles: [ { role: "RolAnalistaLectura", db: "proyecto_accidentes_db" } ]
-});
-```
-**Nota de seguridad:** Dejar la contraseña en texto plano es un recurso aceptable únicamente para fines didácticos dentro del laboratorio. En un entorno real, esta credencial debe inyectarse obligatoriamente mediante variables de entorno o un gestor de secretos, evitando por completo subirla al repositorio. Incluir esta buena práctica demuestra que el criterio de seguridad se comprende más allá de la simple ejecución técnica.
+- `consulta_publica` **sí** puede consultar `vista_accidentes_segura`.
+- `consulta_publica` recibe `Unauthorized` al consultar `accidentes`.
+- `analista_vial` **sí** puede leer `accidentes`.
+- `analista_vial` recibe `Unauthorized` al intentar insertar.
 
-
-**3. Vista segura para el rol de consulta pública/restringida:**
-
-```javascript
-db.createView(
-  "vista_accidentes_segura",
-  "accidentes",
-  [
-    {
-      $project: {
-        _id: 0,
-        severity: 1,
-        start_time: 1,
-        "address.state": 1,
-        "weather.condition": 1,
-        description: 1
-      }
-    }
-  ]
-);
-```
-
-Esta vista muestra la severidad, fecha, estado y clima, que son suficientes para hacer análisis generales, pero no incluye `location` (coordenadas exactas) ni `address.street`, protegiendo así la privacidad de los datos conforme a los requerimientos del proyecto.
-
-**4. Rol y usuario `admin_riesgo` (control total sobre la colección fuente):**
-
-```javascript
-db.createRole({
-  role: "RolAdminRiesgo",
-  privileges: [{ 
-    resource: { db: "proyecto_accidentes_db", collection: "accidentes" }, 
-    actions: ["find", "insert", "update", "remove"] 
-  }],
-  roles: []
-});
-
-db.createUser({ 
-  user: "admin_riesgo", 
-  pwd: "PasswordAdminRiesgo2026", 
-  roles: [{ role: "RolAdminRiesgo", db: "proyecto_accidentes_db" }] 
-});
-```
-
-A diferencia de `RolAnalistaLectura`, aquí se incluyen `insert`, `update` y `remove` porque este rol representa a quien administra y mantiene la colección (carga inicial, correcciones o actualizaciones). Es el único perfil con permisos de escritura directos sobre la colección principal, cumpliendo con el principio de privilegio mínimo de asignar capacidad de modificación únicamente al rol de administración.
-
-
-**5. Rol y usuario `consulta_publica` (restringido a la vista, no a la colección fuente):**
-
-```javascript
-db.createRole({
-  role: "RolConsultaPublica",
-  privileges: [{ 
-    resource: { db: "proyecto_accidentes_db", collection: "vista_accidentes_segura" }, 
-    actions: ["find"] 
-  }],
-  roles: []
-});
-
-db.createUser({ 
-  user: "consulta_publica", 
-  pwd: "PasswordPublico2026", 
-  roles: [{ role: "RolConsultaPublica", db: "proyecto_accidentes_db" }] 
-});
-```
-El `resource` de este rol apunta directamente a `vista_accidentes_segura`, **no** a la colección principal `accidentes`. Esto permite controlar el acceso a nivel de campo: aunque el usuario `consulta_publica` intente consultar la colección base, MongoDB rechaza cualquier operación `find` sobre ella porque el rol no tiene permisos en ese recurso, haciendo que la vista sea la única forma autorizada de acceder a la información.
-
-> Las tres contraseñas (`analista_vial`, `admin_riesgo`, `consulta_publica`) están en texto plano únicamente por ser un entorno didáctico del Learner Lab. Vale la pena declarar explícitamente en la entrega que en producción se inyectarían por variables de entorno o un gestor de secretos, y jamás quedarían commiteadas en el repo.
-
-<img width="1163" height="814" alt="image" src="https://github.com/user-attachments/assets/1b375d3b-6550-4ec3-8d8d-964920bb9ac1" />
-
-<img width="817" height="832" alt="image" src="https://github.com/user-attachments/assets/95b8289e-1fab-450d-9785-968253391f3e" />
+![Privilegio mínimo](capturas/05_seguridad_privilegio_minimo.png)
 
 ---
 
-## Límites y alcance declarado
+## Resultados, límites y mejora
 
-- Los 27,049 registros utilizados sirven como una muestra para realizar el análisis, pero no representan todos los accidentes de EE. UU. Por eso, los porcentajes y rankings obtenidos deben tomarse como resultados de esta muestra y no como cifras oficiales.
-- Se encontró un registro con una latitud inválida de 95°, por lo que se decidió excluirlo antes de importar los datos a MongoDB.
-- El modelo de seguridad se realizó con fines académicos y utiliza datos sin información personal directamente identificable. Por lo tanto, sirve como demostración de los controles de acceso, pero no representa una implementación real de cumplimiento normativo.
-- Para las consultas se utilizó `timezone: "UTC"` de manera uniforme. No se consideró la zona horaria específica de cada estado, por lo que algunos resultados de las preguntas 2 y 3 podrían presentar pequeñas variaciones.
+### Resultados principales
 
+- 27,049 documentos cargados y verificados.
+- Los Angeles, CA: 1,847 accidentes, mayor volumen de la muestra.
+- Diciembre: 2,951 accidentes; enero: 2,638; noviembre: 2,621.
+- 08:00: 2,038 accidentes; 16:00: 1,934.
+- Overcast presentó 35.43% de alta severidad dentro de su categoría.
+- La consulta Rain + severity >= 3 pasó de 27,049 documentos examinados con `COLLSCAN` a 73 con `IXSCAN`.
+- La vista pública y las restricciones de escritura/lectura fueron comprobadas con denegaciones reales.
 
+### Límites
 
+- Muestra estática: análisis descriptivo, no predicción en tiempo real.
+- No se reconstruye la zona horaria local original por estado.
+- `2dsphere` está preparado, pero no forma parte de las cinco consultas actuales.
+
+### Mejora propuesta
+
+Implementar colecciones **Time Series** de MongoDB, conservar la zona horaria de origen de cada evento e integrar la base con una herramienta de BI para monitoreo dinámico.
