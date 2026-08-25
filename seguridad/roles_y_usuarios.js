@@ -1,11 +1,8 @@
 // roles_y_usuarios.js
 // Modelo de seguridad de tres roles: admin_riesgo, analista_vial, consulta_publica.
 // Requiere ejecutarse con una identidad que tenga privilegios para crear roles/usuarios.
-// IMPORTANTE: no contiene contraseñas en texto plano. mongosh solicitará cada contraseña.
-//
-// Si el servidor muestra "Access control is not enabled", los roles quedan DISEÑADOS
-// y creados, pero la denegación efectiva no puede considerarse comprobada hasta habilitar
-// autenticación/control de acceso en el entorno.
+// Importante: no contiene contraseñas en texto plano. mongosh solicitará cada contraseña.
+
 
 db = db.getSiblingDB("proyecto_accidentes_db");
 
