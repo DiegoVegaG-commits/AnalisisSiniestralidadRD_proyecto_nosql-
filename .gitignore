@@ -4,9 +4,14 @@ __pycache__/
 
 # Entorno / credenciales
 .env
+.env.*
 
-# Datos generados localmente (opcional: descomenta si no quieres subir el NDJSON)
-# accidentes_mongo.jsonl
+# Logs y temporales
+*.log
 
 # Sistema
 .DS_Store
+Thumbs.db
+
+# Datos generados localmente
+# accidentes_mongo.jsonl
