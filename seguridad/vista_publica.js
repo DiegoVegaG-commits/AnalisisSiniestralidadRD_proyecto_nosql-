@@ -1,11 +1,9 @@
 // vista_publica.js
 // Vista de servidor "vista_accidentes_segura" para minimización de datos.
 // Se ejecuta ANTES de roles_y_usuarios.js.
-//
+
 // La vista excluye location y address.street. Con control de acceso habilitado,
 // RolConsultaPublica puede limitarse a esta vista y no a la colección fuente.
-// En un Learner Lab sin autenticación, la vista demuestra minimización, pero no una
-// denegación efectiva de acceso a la colección original.
 
 db = db.getSiblingDB("proyecto_accidentes_db");
 
