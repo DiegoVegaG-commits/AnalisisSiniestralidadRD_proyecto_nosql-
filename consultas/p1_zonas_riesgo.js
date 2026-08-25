@@ -1,8 +1,7 @@
 // p1_zonas_riesgo.js
 // Pregunta 1: ¿Qué zonas presentan mayor frecuencia y severidad promedio?
 //
-// Este análisis es geográfico/descriptivo porque agrupa por estado y condado.
-// No usa operadores geoespaciales sobre location ni requiere el índice 2dsphere.
+
 var p1 = db.accidentes.aggregate([
   {
     $group: {

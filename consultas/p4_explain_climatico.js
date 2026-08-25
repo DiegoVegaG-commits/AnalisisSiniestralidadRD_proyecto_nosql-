@@ -1,8 +1,8 @@
 // p4_explain_climatico.js
 // Pregunta 4: ¿Cómo se relacionan las condiciones climáticas con la severidad?
-// Además, comprueba el rendimiento del índice compuesto clima + severidad.
+// Comprueba el rendimiento del índice compuesto clima + severidad.
 
-// A. Análisis de negocio: compara condiciones climáticas.
+// Análisis: compara condiciones climáticas.
 var impactoClimatico = db.accidentes.aggregate([
   { $match: { "weather.condition": { $type: "string", $ne: "" } } },
   {

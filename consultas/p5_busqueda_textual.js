@@ -3,7 +3,6 @@
 // términos asociados con bloqueos y cierres viales?
 //
 // $text trabaja con un índice de texto y textScore expresa relevancia textual.
-// No calcula frecuencia global de palabras ni búsqueda semántica/vectorial.
 var p5 = db.accidentes.aggregate([
   {
     $match: {
