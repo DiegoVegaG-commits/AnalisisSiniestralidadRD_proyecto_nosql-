@@ -1,10 +1,8 @@
 // p1_zonas_riesgo.js
-// Pregunta 1: Zonas y condados con mayor riesgo (geoespacial/descriptivo)
+// Pregunta 1: ¿Qué zonas presentan mayor frecuencia y severidad promedio?
 //
-// Agrupa los incidentes por estado y condado, sumando el total de
-// accidentes y calculando la severidad promedio, para identificar
-// las zonas de mayor concentracion de siniestros.
-
+// Este análisis es geográfico/descriptivo porque agrupa por estado y condado.
+// No usa operadores geoespaciales sobre location ni requiere el índice 2dsphere.
 var p1 = db.accidentes.aggregate([
   {
     $group: {
@@ -26,5 +24,5 @@ var p1 = db.accidentes.aggregate([
   { $limit: 10 }
 ]).toArray();
 
-print("--- TOP 10 ESTADOS CON MÁS ACCIDENTES ---");
+print("--- TOP 10 ZONAS CON MÁS ACCIDENTES ---");
 printjson(p1);

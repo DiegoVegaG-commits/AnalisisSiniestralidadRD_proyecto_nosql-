@@ -1,16 +1,18 @@
 // vista_publica.js
-// Vista de servidor "vista_accidentes_segura"
+// Vista de servidor "vista_accidentes_segura" para minimización de datos.
+// Se ejecuta ANTES de roles_y_usuarios.js.
 //
-// Se ejecuta ANTES de roles_y_usuarios.js, porque RolConsultaPublica
-// otorga privilegios sobre esta vista y no puede apuntar a un recurso
-// que todavía no existe.
-//
-// Por qué una vista y no una proyección en el cliente: db.createView
-// aplica el filtro de campos en el servidor de MongoDB, así que el
-// rol de consulta pública no puede pedir campos adicionales
-// manipulando la consulta desde el cliente — solo ve lo que la vista
-// expone. Se omiten "location" (coordenadas exactas) y
-// "address.street", clasificados como cuasi-identificadores.
+// La vista excluye location y address.street. Con control de acceso habilitado,
+// RolConsultaPublica puede limitarse a esta vista y no a la colección fuente.
+// En un Learner Lab sin autenticación, la vista demuestra minimización, pero no una
+// denegación efectiva de acceso a la colección original.
+
+db = db.getSiblingDB("proyecto_accidentes_db");
+
+// Permite reejecutar el script desde un estado conocido.
+if (db.getCollectionInfos({ name: "vista_accidentes_segura" }).length > 0) {
+  db.vista_accidentes_segura.drop();
+}
 
 db.createView(
   "vista_accidentes_segura",
@@ -22,6 +24,7 @@ db.createView(
         severity: 1,
         start_time: 1,
         "address.state": 1,
+        "address.county": 1,
         "weather.condition": 1,
         description: 1
       }
@@ -30,3 +33,4 @@ db.createView(
 );
 
 print("Vista 'vista_accidentes_segura' creada correctamente.");
+print("Campos excluidos: location y address.street.");

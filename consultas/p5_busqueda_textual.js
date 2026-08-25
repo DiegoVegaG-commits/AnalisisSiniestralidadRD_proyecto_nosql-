@@ -1,12 +1,9 @@
 // p5_busqueda_textual.js
-// Pregunta 5: Afectaciones críticas (búsqueda textual)
+// Pregunta 5: ¿Qué accidentes de alta severidad son más relevantes para
+// términos asociados con bloqueos y cierres viales?
 //
-// Implementa mineria de datos sobre el campo de texto libre
-// "description" utilizando el operador $text (requiere el indice
-// { description: "text" }). Ordena los resultados con
-// $meta: "textScore" para mostrar los accidentes mas relevantes que
-// mencionan cierres totales de vialidades.
-
+// $text trabaja con un índice de texto y textScore expresa relevancia textual.
+// No calcula frecuencia global de palabras ni búsqueda semántica/vectorial.
 var p5 = db.accidentes.aggregate([
   {
     $match: {
@@ -27,5 +24,5 @@ var p5 = db.accidentes.aggregate([
   { $limit: 10 }
 ]).toArray();
 
-print("--- TOP 10 INCIDENTES CRÍTICOS POR RELEVANCIA DE TEXTO ---");
+print("--- TOP 10 INCIDENTES CRÍTICOS POR RELEVANCIA TEXTUAL ---");
 printjson(p5);

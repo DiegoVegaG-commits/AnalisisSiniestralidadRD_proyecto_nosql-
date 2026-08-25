@@ -1,11 +1,9 @@
 // p3_horarios_luz.js
-// Pregunta 3: Horarios y condiciones de luz
+// Pregunta 3: ¿En qué horarios y condiciones de luz ocurren más accidentes?
 //
-// Cruza la hora exacta del dia (extraida en UTC, mismo criterio que
-// la pregunta 2 para mantener consistencia) con el periodo de luz
-// solar (sunrise_sunset), para ubicar los horarios de mayor
-// siniestralidad y si se concentran en condiciones de baja visibilidad.
-
+// La hora se extrae de la representación BSON Date almacenada con sufijo Z.
+// Esto permite consistencia técnica en la muestra, pero no equivale a reconstruir
+// la hora local original de cada estado; esa es una limitación declarada.
 var p3 = db.accidentes.aggregate([
   {
     $project: {
@@ -34,5 +32,5 @@ var p3 = db.accidentes.aggregate([
   { $limit: 10 }
 ]).toArray();
 
-print("--- TOP 10 HORARIOS Y LUZ DE DÏA CON MÁS ACCIDENTES ---");
+print("--- TOP 10 HORARIOS Y CONDICIONES DE LUZ ---");
 printjson(p3);
