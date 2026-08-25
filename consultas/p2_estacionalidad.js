@@ -1,13 +1,5 @@
 // p2_estacionalidad.js
-// Pregunta 2: ¿Qué meses concentran más accidentes y mayor severidad?
-// Incluye la evidencia temporal solicitada por la rúbrica:
-//   1) BSON Date,
-//   2) consulta por intervalo [inicio, fin),
-//   3) índice start_time,
-//   4) pipeline por periodo y prueba con fechas conocidas.
-
-// A. Prueba por intervalo conocido: enero de 2022.
-// [inicio, fin) incluye 2022-01-01 y excluye 2022-02-01.
+// Pregunta 2: ¿Qué meses concentran más accidentes y mayor severidad? 
 var inicio = ISODate("2022-01-01T00:00:00Z");
 var fin = ISODate("2022-02-01T00:00:00Z");
 
